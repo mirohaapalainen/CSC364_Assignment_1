@@ -140,9 +140,9 @@ def receive_packet(connection, max_buffer_size):
         print("The packet size is greater than expected", packet_size)
     # 3. Decode the packet and strip any trailing whitespace.
     decoded_packet = received_packet.decode().strip()
-    # 3. Append the packet to received_by_router_2.txt.
+    # 3. Append the packet to received_by_router_4.txt.
     print("received packet", decoded_packet)
-    write_to_file("received_by_router_2.txt", ",".join(decoded_packet))
+    ## ...
     # 4. Split the packet by the delimiter.
     packet = decoded_packet.split(",")
     # 5. Return the list representation of the packet.
@@ -171,7 +171,7 @@ def write_to_file(path, packet_to_write, send_to_router=None):
 def start_server():
     # 1. Create a socket.
     host = "127.0.0.1"
-    port = 8002
+    port = 8004
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     print("Socket created")
@@ -186,7 +186,7 @@ def start_server():
     print("Socket now listening")
 
     # 4. Read in and store the forwarding table.
-    forwarding_table = read_csv("router_2_table.csv")
+    forwarding_table = read_csv("router_4_table.csv")
     # 5. Store the default gateway port.
     default_gateway_port = find_default_gateway(forwarding_table)
     # 6. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
@@ -222,7 +222,7 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
 
         if len(packet) < 4:
             print("Malformed packet", packet)
-            write_to_file("discarded_by_router_2.txt", ",".join(packet))
+            write_to_file("discarded_by_router_4.txt", ",".join(packet))
             continue
 
         # 5. Store the source IP, destination IP, payload, and TTL.
@@ -260,17 +260,17 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
             send_port = default_gateway_port
 
         if new_ttl <= 0:
-            write_to_file("discarded_by_router_2.txt", new_packet)
+            write_to_file("discarded_by_router_4.txt", new_packet)
             print("DISCARD (TTL=0):", new_packet)
             continue
 
         # 11. Either
-        # (a) send the new packet to the appropriate port (and append it to sent_by_router_2.txt),
-        # (b) append the payload to out_router_2.txt without forwarding because this router is the last hop, or
-        # (c) append the new packet to discarded_by_router_2.txt and do not forward the new packet
-        if send_port == "8003":
-            print("sending packet", new_packet, "to Router 3")
-            write_to_file("sent_by_router_2.txt", new_packet, send_to_router="3")
+        # (a) send the new packet to the appropriate port (and append it to sent_by_router_4.txt),
+        # (b) append the payload to out_router_4.txt without forwarding because this router is the last hop, or
+        # (c) append the new packet to discarded_by_router_4.txt and do not forward the new packet
+        if send_port == "8005":
+            print("sending packet", new_packet, "to Router 5")
+            write_to_file("sent_by_router_4.txt", new_packet, send_to_router="5")
 
             try:
                 client = create_socket("127.0.0.1", int(send_port))
@@ -278,18 +278,17 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
                 client.close()
             except Exception as e:
                 print("Error sending to next hop port", send_port, "->", e)
-                write_to_file("discarded_by_router_2.txt", new_packet)
+                write_to_file("discarded_by_router_4.txt", new_packet)
                 print("DISCARD", new_packet)
-
-        elif send_port == "8004":
-            print("sending packet", new_packet, "to Router 4")
-            write_to_file("sent_by_router_2.txt", new_packet, send_to_router="4")
+        elif send_port == "8006":
+            print("sending packet", new_packet, "to Router 6")
+            write_to_file("sent_by_router_4.txt", new_packet, send_to_router="6")
         elif final_hop or (send_port == "127.0.0.1"):
             print("OUT:", payload)
-            write_to_file("out_router_2.txt", payload)
+            write_to_file("out_router_4.txt", payload)
         else:
             print("DISCARD:", new_packet)
-            write_to_file("discarded_by_router_2.txt", new_packet)
+            write_to_file("discarded_by_router_4.txt", new_packet)
 
 
 # Main Program
