@@ -75,7 +75,7 @@ def generate_forwarding_table_with_range(table):
             # 6. Find the IP range.
             ip_range = find_ip_range(network_dst_bin, netmask_bin)
             # 7. Build the new row.
-            new_row = [network_dst_string, netmask_string, row[2], ip_range]
+            new_row = [network_dst_string, netmask_string, row[2], row[3], ip_range]
             # 8. Append the new row to new_table.
             new_table.append(new_row)
     # 9. Return new_table.
@@ -172,22 +172,22 @@ sockets = {}
 for interface, port in port_map.items():
     try:
         soc = create_socket(HOST, port)
-        sockets[interface] = soc
+        sockets[str(port)] = soc
         print(f"Connected to Router {interface} on port {port}")
     except SystemExit:
-        sockets[interface] = None
+        sockets[str(port)] = None
     except Exception as e:
         print(f"Could not connect to Router {interface} : {e}")
-        sockets[interface] = None
+        sockets[str(port)] = None
 
 # 2. Read in and store the forwarding table.
-forwarding_table = read_csv("./router1_table.csv")
+forwarding_table = read_csv("./input/router_1_table.csv")
 # 3. Store the default gateway port.
 default_gateway_port = find_default_gateway(forwarding_table)
 # 4. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
 forwarding_table_with_range = generate_forwarding_table_with_range(forwarding_table)
 # 5. Read in and store the packets.
-packets_table = read_csv("packets.csv")
+packets_table = read_csv("./input/packets.csv")
 
 if not os.path.isdir("./output"):
     os.makedirs("./output")
@@ -223,24 +223,22 @@ for packet in packets_table:
     # 9. Find the appropriate sending port to forward this new packet to.
     sending_port = None
     for row in forwarding_table_with_range:
-        ip_range = row[3]
+        ip_range = row[4]
         if ip_range[0] <= destinationIP_bin <= ip_range[1]:
-            sending_port = row[2]
+            sending_port = row[3]
             break
 
     if sending_port is None:
         sending_port = default_gateway_port
 
     if new_ttl <= 0:
-        print("DISCARD:", new_packet)
+        print("DISCARD (time-to-live is zero):", new_packet)
         write_to_file(DISCARD_FILE, new_packet)
         time.sleep(1)
         continue
-
-    if sending_port == THIS_ROUTER_ID:
-        print("OUT:", payload)
+    elif sending_port == "127.0.0.1" or sending_port == HOST:
+        print(f"OUT (final destination):", payload)
         write_to_file(OUT_FILE, payload)
-
     elif sending_port in sockets and sockets[sending_port] is not None:
         print(f"Sending packet {new_packet} to Router {sending_port}")
         try:
@@ -248,9 +246,8 @@ for packet in packets_table:
         except Exception as e:
             print(f"Socket send failed to Router {sending_port}: {e}")
         write_to_file(SENT_FILE, new_packet, send_to_router=sending_port)
-
     else:
-        print("DISCARD:", new_packet)
+        print("DISCARD (Next hop is unknown or not connected to this router):", new_packet)
         write_to_file(DISCARD_FILE, new_packet)
 
     time.sleep(1)

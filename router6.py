@@ -65,6 +65,8 @@ def generate_forwarding_table_with_range(table):
         # 3. and process each network destination other than 0.0.0.0
         # (0.0.0.0 is only useful for finding the default port).
         if row[0] != "0.0.0.0":
+            if row[3] in ["a", "b", "c", "d", "e", "f"]:
+                continue
             # 4. Store the network destination and netmask.
             network_dst_string = row[0]
             netmask_string = row[1]
@@ -75,11 +77,11 @@ def generate_forwarding_table_with_range(table):
 
             ip_range = find_ip_range(network_dst_bin, netmask_bin)
             # 7. Build the new row.
-            new_row = [network_dst_string, netmask_string, row[2], ip_range]
+            new_row = [network_dst_string, netmask_string, row[2], row[3], ip_range]
             # 8. Append the new row to new_table.
             new_table.append(new_row)
             # 9. Return new_table.
-        return new_table
+    return new_table
 
 
 # The purpose of this function is to convert a string IP to its binary representation.
@@ -134,6 +136,10 @@ def bit_not(n, numbits=32):
 def receive_packet(connection, max_buffer_size):
     # 1. Receive the packet from the socket.
     received_packet = connection.recv(max_buffer_size)
+
+    if not received_packet:
+        return None
+
     # 2. If the packet size is larger than the max_buffer_size, print a debugging message
     packet_size = sys.getsizeof(received_packet)
     if packet_size > max_buffer_size:
@@ -142,7 +148,7 @@ def receive_packet(connection, max_buffer_size):
     decoded_packet = received_packet.decode().strip()
     # 3. Append the packet to received_by_router_6.txt.
     print("received packet", decoded_packet)
-    ## ...
+    write_to_file("./output/received_by_router_6.txt", ",".join(decoded_packet))
     # 4. Split the packet by the delimiter.
     packet = decoded_packet.split(",")
     # 5. Return the list representation of the packet.
@@ -186,7 +192,7 @@ def start_server():
     print("Socket now listening")
 
     # 4. Read in and store the forwarding table.
-    forwarding_table = read_csv("router_6_table.csv")
+    forwarding_table = read_csv("./input/router_6_table.csv")
     # 5. Store the default gateway port.
     default_gateway_port = find_default_gateway(forwarding_table)
     # 6. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
@@ -217,12 +223,15 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
         packet = receive_packet(connection, max_buffer_size)
 
         # 4. If the packet is empty (Router 1 has finished sending all packets), break out of the processing loop
-        if not packet:
+        if packet is None:
+            print("Connection closed by peer, ending processing thread")
             break
 
-        if len(packet) < 4:
+        if not packet or len(packet) < 4:
             print("Malformed packet", packet)
-            write_to_file("discarded_by_router_6.txt", ",".join(packet))
+            if not packet:
+                packet = ""
+            write_to_file("./output/discarded_by_router_2.txt", ",".join(packet))
             continue
 
         # 5. Store the source IP, destination IP, payload, and TTL.
@@ -245,8 +254,8 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
         send_port = None
         final_hop = False
         for row in forwarding_table_with_range:
-            min_ip = row[4]
-            max_ip = row[5]
+            min_ip = row[4][0]
+            max_ip = row[4][1]
 
             if min_ip <= destinationIP_bin <= max_ip:
                 send_port = row[3]
@@ -260,15 +269,15 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
             send_port = default_gateway_port
 
         if new_ttl <= 0:
-            write_to_file("discarded_by_router_6.txt", new_packet)
+            write_to_file("./output/discarded_by_router_6.txt", new_packet)
             print("DISCARD (TTL=0):", new_packet)
             continue
         elif final_hop or (send_port == "127.0.0.1"):
             print("OUT:", payload)
-            write_to_file("out_router_6.txt", payload)
+            write_to_file("./output/out_router_6.txt", payload)
         else:
             print("DISCARD:", new_packet)
-            write_to_file("discarded_by_router_6.txt", new_packet)
+            write_to_file("./output/discarded_by_router_6.txt", new_packet)
 
 
 # Main Program
